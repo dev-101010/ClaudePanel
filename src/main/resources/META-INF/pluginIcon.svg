@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <!--
+    Marketplace-Logo. Deliberately generic: a docked panel with a conversation in it.
+    It borrows nothing from Anthropic's brand marks - this is a third-party plugin and
+    should not look like an official one.
+  -->
+  <rect x="4" y="6" width="32" height="23" rx="3" fill="#4A6DA7"/>
+  <path d="M11 29 L11 35 L18 29 Z" fill="#4A6DA7"/>
+  <rect x="9" y="12" width="22" height="3" rx="1.5" fill="#FFFFFF"/>
+  <rect x="9" y="18" width="15" height="3" rx="1.5" fill="#FFFFFF"/>
+</svg>

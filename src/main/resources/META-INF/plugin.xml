@@ -6,16 +6,25 @@
     <description>
         <![CDATA[
             <p>
-              A docked tool window that runs Claude Code as a background process and renders
-              the conversation natively, without a terminal emulator.
+              A docked tool window that runs the Claude Code CLI as a background process and
+              renders the conversation natively — no terminal emulator, no TUI.
+            </p>
+            <p>
+              <b>Unofficial, third-party plugin. Not affiliated with, endorsed by, or
+              supported by Anthropic.</b> Anthropic publishes its own JetBrains plugin
+              separately.
             </p>
             <ul>
-              <li>Recent sessions at the top; selecting one resumes it</li>
-              <li>Permission mode and model selectable at the bottom</li>
-              <li>Talks to the CLI over its documented JSON streaming protocol</li>
+              <li>Sessions in a dropdown — picking one resumes it, and its transcript comes back</li>
+              <li>Tool calls as a single line each, coloured by outcome, without walls of file content</li>
+              <li>Permission requests answered in place: Allow and Deny sit right below the call</li>
+              <li>Interrupt a running answer without ending the session</li>
+              <li>Permission mode and model remembered per project; usage shown as a ring</li>
             </ul>
             <p>
-              Requires the <code>claude</code> CLI on your PATH.
+              <b>Requirements:</b> the <code>claude</code> CLI on your PATH and a Claude
+              subscription. The plugin starts the CLI and never handles your credentials —
+              signing in stays inside the CLI itself.
             </p>
         ]]>
     </description>

@@ -41,10 +41,62 @@ dependencies {
     }
 }
 
+/**
+ * Zieht den obersten Abschnitt aus CHANGELOG.md als HTML fuer die change-notes.
+ *
+ * Von Hand gepflegte change-notes laufen frueher oder spaeter vom CHANGELOG weg, und die
+ * Abweichung faellt erst im Marketplace auf. Ueber `providers.fileContents` gelesen, damit
+ * der Configuration Cache es mitbekommt, wenn sich die Datei aendert.
+ */
+val changeNotesHtml: Provider<String> =
+    providers.fileContents(layout.projectDirectory.file("CHANGELOG.md")).asText.map { text ->
+        val lines = text.lines()
+        val start = lines.indexOfFirst { it.startsWith("## [") }
+        if (start < 0) return@map ""
+
+        val rest = lines.drop(start + 1)
+        val end = rest.indexOfFirst { it.startsWith("## [") }
+        val section = if (end < 0) rest else rest.take(end)
+
+        // Fortsetzungszeilen gehoeren zum vorigen Punkt - sonst zerfaellt jeder umbrochene
+        // Eintrag in mehrere. Leerzeilen und Zwischenueberschriften beenden einen Punkt;
+        // ohne das haengt sich die naechste Ueberschrift an den letzten Eintrag.
+        val items = mutableListOf<String>()
+        var open: StringBuilder? = null
+        for (line in section) {
+            val trimmed = line.trim()
+            when {
+                trimmed.startsWith("- ") -> {
+                    open = StringBuilder(trimmed.removePrefix("- "))
+                    items += ""
+                    items[items.lastIndex] = open.toString()
+                }
+
+                trimmed.isEmpty() || trimmed.startsWith("#") -> open = null
+
+                open != null -> {
+                    open.append(' ').append(trimmed)
+                    items[items.lastIndex] = open.toString()
+                }
+            }
+        }
+
+        items.joinToString("", prefix = "<ul>", postfix = "</ul>") { item ->
+            val escaped = item
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace(Regex("`([^`]+)`"), "<code>$1</code>")
+            "<li>$escaped</li>"
+        }
+    }
+
 intellijPlatform {
     buildSearchableOptions = false
 
     pluginConfiguration {
+        changeNotes = changeNotesHtml
+
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")
             untilBuild = provider { null }
