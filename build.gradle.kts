@@ -153,7 +153,13 @@ val prepareSandboxProject by tasks.registering {
 
 tasks.runIde {
     dependsOn(prepareSandboxProject)
-    argumentProviders.add(CommandLineArgumentProvider { listOf(sandboxProject.asFile.absolutePath) })
+
+    // Erst in eine lokale Variable holen: greift das Lambda auf `sandboxProject` zu, haelt
+    // es eine Referenz auf das Build-Skript fest, und die laesst sich nicht in den
+    // Configuration Cache schreiben - "cannot serialize Gradle script object references".
+    // Der Lauf selbst gelingt trotzdem, der Fehler faellt erst am Ende an.
+    val sandboxPath = sandboxProject.asFile.absolutePath
+    argumentProviders.add(CommandLineArgumentProvider { listOf(sandboxPath) })
 
     // Schaltet den Mitschnitt nach system/log/claude-panel.log frei. Bewusst nur hier:
     // die Datei enthaelt die Unterhaltung im Klartext.
