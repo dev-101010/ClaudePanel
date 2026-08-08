@@ -1,0 +1,32 @@
+<idea-plugin>
+    <id>de.drochmann.claudepanel</id>
+    <name>Claude Panel</name>
+    <vendor email="dennis.drochmann@gmail.com" url="https://github.com/dev-101010">Dennis Drochmann</vendor>
+
+    <description>
+        <![CDATA[
+            <p>
+              A docked tool window that runs Claude Code as a background process and renders
+              the conversation natively, without a terminal emulator.
+            </p>
+            <ul>
+              <li>Recent sessions at the top; selecting one resumes it</li>
+              <li>Permission mode and model selectable at the bottom</li>
+              <li>Talks to the CLI over its documented JSON streaming protocol</li>
+            </ul>
+            <p>
+              Requires the <code>claude</code> CLI on your PATH.
+            </p>
+        ]]>
+    </description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+                id="Claude Panel"
+                anchor="right"
+                factoryClass="de.drochmann.claudepanel.ClaudePanelToolWindowFactory"
+                icon="/icons/claudePanel.svg"/>
+    </extensions>
+</idea-plugin>

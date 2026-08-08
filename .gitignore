@@ -1,0 +1,19 @@
+# Project exclude paths
+/.gradle/
+/build/
+/.intellijPlatform/
+/.kotlin/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+### Signing / publishing secrets ###
+*.pem
+*.crt
+*.p12
+.env
+local.properties
