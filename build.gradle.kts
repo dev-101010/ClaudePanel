@@ -119,6 +119,13 @@ intellijPlatform {
             // Bewusst nur die Ziel-IDE, damit der Lauf ueberschaubar bleibt. Der
             // Marketplace verifiziert beim Upload zusaetzlich gegen sein eigenes IDE-Set.
             create(IntelliJPlatformType.IntellijIdea, providers.gradleProperty("platformVersion"))
+
+            // Zusaetzlich gegen eine lokal installierte IDE pruefen - etwa Android Studio,
+            // das eine Plattform-Generation zurueckhaengt. Der Pfad ist rechnerabhaengig und
+            // kommt deshalb ueber -PverifyLocalPath=... oder die globale gradle.properties,
+            // nicht ins Repository.
+            val verifyLocal = providers.gradleProperty("verifyLocalPath")
+            if (verifyLocal.isPresent) local(verifyLocal.get())
         }
     }
 }

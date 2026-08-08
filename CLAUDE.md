@@ -391,8 +391,22 @@ Nicht verwendbar für den Zweck: `system/init` meldet zwar `model` (aufgelöst, 
 (`cwd`, `session_id`, `tools`, `mcp_servers`, `model`, `permissionMode`, `slash_commands`,
 `apiKeySource`, `claude_code_version`, `output_style`, `agents`, `skills`, `plugins`,
 `capabilities`, `analytics_disabled`, `product_feedback_disabled`, `uuid`, `memory_paths`,
-`fast_mode_state`, `fast_mode_disabled_reason`). Und `permissionMode` stand dort auf
-`default`, was in der Auswahlliste von `--permission-mode` gar nicht vorkommt.
+`fast_mode_state`, `fast_mode_disabled_reason`).
+
+**`init.permissionMode` spiegelt nicht wörtlich zurück.** Alle sechs Modi am 2026-08-08
+durchgemessen, indem die vollständige Panel-Kommandozeile mit je einem Modus gestartet
+wurde:
+
+| mitgegeben | von `init` gemeldet |
+|---|---|
+| `acceptEdits`, `auto`, `bypassPermissions`, `dontAsk`, `plan` | unverändert |
+| `manual` | **`default`** |
+
+`default` ist also nicht etwa ein siebter Modus, sondern der Name, unter dem `manual`
+zurückkommt. Damit ließe sich der Modus grundsätzlich auch aus `init` beziehen — man müsste
+nur `default` auf `manual` zurückbilden. Gemacht ist das nicht: Vorgabe bleibt
+`acceptEdits`, weil vom Projekt abhängt, was vertretbar ist, und `manual` in einem
+headless Panel „zu allem nein" bedeutet, solange der Freigabedialog nicht greift.
 
 ## Entwickeln und Testen
 

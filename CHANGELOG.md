@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setting stays, and the choice returns when the name does.
 - The captions "Mode:" and "Model:" gave way to tooltips. In a narrow tool window they took
   a third of the row, and the values say what they are.
+- Installs on Android Studio as well: the minimum platform is 261 rather than 262. Verified
+  against Android Studio 261.26222 and IntelliJ IDEA 262.8665, both "Compatible".
 
 ## [0.1.0] - 2026-08-08
 

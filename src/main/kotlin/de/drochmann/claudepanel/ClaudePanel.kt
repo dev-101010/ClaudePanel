@@ -16,7 +16,7 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.JBColor
-import com.intellij.ui.SimpleListCellRenderer
+import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
@@ -34,6 +34,7 @@ import javax.swing.JButton
 import javax.swing.JComboBox
 import javax.swing.JComponent
 import javax.swing.JLabel
+import javax.swing.JList
 import javax.swing.JMenuItem
 import javax.swing.JPanel
 import javax.swing.JTextPane
@@ -1235,9 +1236,22 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         /** Shown for the empty entry - in the list only, never as a value. */
         private const val DEFAULT_LABEL = "(leave to the CLI)"
 
+        /**
+         * `SimpleListCellRenderer.create` would be shorter but is scheduled for removal;
+         * [ColoredListCellRenderer] has been around unchanged for years and matches the
+         * platform's list styling, which a plain Swing renderer would not.
+         */
         private fun defaultLabelledRenderer(label: () -> String) =
-            SimpleListCellRenderer.create<String> { cell, value, _ ->
-                cell.text = if (value.isNullOrBlank()) label() else value
+            object : ColoredListCellRenderer<String>() {
+                override fun customizeCellRenderer(
+                    list: JList<out String>,
+                    value: String?,
+                    index: Int,
+                    selected: Boolean,
+                    hasFocus: Boolean,
+                ) {
+                    append(if (value.isNullOrBlank()) label() else value)
+                }
             }
 
         private const val PERMISSION_TIMEOUT_MS = 5 * 60 * 1000
