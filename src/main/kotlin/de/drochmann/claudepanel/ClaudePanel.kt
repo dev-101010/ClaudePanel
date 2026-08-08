@@ -54,13 +54,6 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private val transcript = JTextPane()
     private val input = JBTextField()
     /**
-     * What the empty entry is called, once the CLI has said what it would use anyway. Until
-     * then it says only that the choice is not being overridden.
-     */
-    private var modelDefaultLabel = DEFAULT_LABEL
-    private var effortDefaultLabel = DEFAULT_LABEL
-
-    /**
      * The three of them carry no caption: in a tool window this narrow the words would take
      * a third of the row, and the values say what they are anyway. What a field is for goes
      * into its tooltip instead.
@@ -76,12 +69,12 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private val modelCombo = ComboBox(MODELS).apply {
         toolTipText = "Model"
-        renderer = defaultLabelledRenderer { modelDefaultLabel }
+        renderer = defaultLabelledRenderer()
     }
 
     private val effortCombo = ComboBox(EFFORTS).apply {
         toolTipText = "Effort level"
-        renderer = defaultLabelledRenderer { effortDefaultLabel }
+        renderer = defaultLabelledRenderer()
     }
 
     /**
@@ -344,8 +337,14 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             onEdt {
                 suppressSettingEvents = true
                 try {
-                    options.currentModel?.let { modelDefaultLabel = "as in the CLI: $it" }
-                    options.currentEffort?.let { effortDefaultLabel = "as in the CLI: $it" }
+                    // Into the tooltip, not into the list: the list speaks the CLI's
+                    // aliases, and a display name among them reads as a second vocabulary.
+                    options.currentModel?.let {
+                        modelCombo.toolTipText = "Model - the CLI is currently set to $it"
+                    }
+                    options.currentEffort?.let {
+                        effortCombo.toolTipText = "Effort level - the CLI is currently set to $it"
+                    }
 
                     // Each list on its own: one unreadable answer must not cost the others.
                     // What was stored decides the selection, not what is in the box - a
@@ -933,7 +932,18 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 ClaudeSessionIndex.getInstance(project)
                     .record(sessionId, SimpleDateFormat(TITLE_FORMAT).format(Date()))
                 reloadSessions()
-                if (!resumed) append("New session ${sessionId.take(8)} started.", STYLE_DIM)
+                // The only place the alias is resolved for free: "opus" says nothing about
+                // the version, init answers with the id that was actually taken. Once per
+                // process - the guard above sees to that.
+                val model = event.get("model")?.takeIf { it.isJsonPrimitive }?.asString
+                when {
+                    !resumed && model != null ->
+                        append("New session ${sessionId.take(8)} started with $model.", STYLE_DIM)
+
+                    !resumed -> append("New session ${sessionId.take(8)} started.", STYLE_DIM)
+
+                    model != null -> append("Running $model.", STYLE_DIM)
+                }
             }
 
             // Headless the CLI does not ask, it refuses outright - so the "manual" mode
@@ -1233,15 +1243,20 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
          */
         private val EFFORTS = arrayOf("", "low", "medium", "high", "xhigh", "max", "auto")
 
-        /** Shown for the empty entry - in the list only, never as a value. */
-        private const val DEFAULT_LABEL = "(leave to the CLI)"
+        /**
+         * Shown for the empty entry - in the list only, never as a value. Deliberately
+         * without naming the model: everything else in the list is a CLI alias, and a
+         * display name like "Opus 5" among them made the list read in two vocabularies.
+         * What the CLI is set to goes into the tooltip, where a whole sentence fits.
+         */
+        private const val DEFAULT_LABEL = "(as in the CLI)"
 
         /**
          * `SimpleListCellRenderer.create` would be shorter but is scheduled for removal;
          * [ColoredListCellRenderer] has been around unchanged for years and matches the
          * platform's list styling, which a plain Swing renderer would not.
          */
-        private fun defaultLabelledRenderer(label: () -> String) =
+        private fun defaultLabelledRenderer() =
             object : ColoredListCellRenderer<String>() {
                 override fun customizeCellRenderer(
                     list: JList<out String>,
@@ -1250,7 +1265,7 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     selected: Boolean,
                     hasFocus: Boolean,
                 ) {
-                    append(if (value.isNullOrBlank()) label() else value)
+                    append(if (value.isNullOrBlank()) DEFAULT_LABEL else value)
                 }
             }
 
