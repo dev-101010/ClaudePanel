@@ -359,9 +359,12 @@ und frischt dahinter auf. Der Zwischenspeicher liegt **nur im Arbeitsspeicher**.
   ist nach dem ersten Marketplace-Upload **unveränderlich**.
 - MIT-Lizenz, Code öffentlich auf GitHub: <https://github.com/dev-101010/ClaudePanel>.
 - **Nicht signiert, wie beim Schwesterprojekt.** Signierung ist nicht verpflichtend — ohne
-  sie zeigt die IDE beim Installieren einen Warndialog, mehr nicht. Beleg statt Vermutung:
-  „Recent Tabs ToolWindow" (`de.drochmann.recenttabs`, Marketplace-ID 33422) wurde am
-  2026-08-08 unsigniert hochgeladen und freigegeben. Wer es später doch will, braucht
+  sie zeigt die IDE beim Installieren einen Warndialog, mehr nicht. Belegt ist, dass der
+  Upload unsigniert **angenommen** wird: „Recent Tabs ToolWindow"
+  (`de.drochmann.recenttabs`, Marketplace-ID 33422) liegt seit 2026-08-08 dort, unsigniert
+  — das ZIP enthält keine Signaturdateien. Ob die Moderation es durchgewinkt hat, lässt
+  sich von außen nicht feststellen; das Plugin war ohnehin nur ein Versuch. Wer es später
+  doch signieren will, braucht
   `openssl genpkey` + `openssl req` und drei Einträge in der globalen `gradle.properties`;
   der Build ist dafür vorbereitet.
 - Bei einem versteckten Plugin meldet die Marketplace-API dauerhaft `approve: false` neben
