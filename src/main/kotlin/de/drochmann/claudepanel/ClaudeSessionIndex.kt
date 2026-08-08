@@ -8,10 +8,10 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 
 /**
- * Ein Eintrag der Session-Liste.
+ * One entry of the session list.
  *
- * Bewusst mit parameterlosem Konstruktor und `var`-Feldern: die XML-Serialisierung
- * der Plattform instanziiert die Klasse reflektiv.
+ * Deliberately with a no-argument constructor and `var` fields: the platform's XML
+ * serialisation instantiates the class reflectively.
  */
 class SessionEntry {
     var id: String = ""
@@ -28,13 +28,12 @@ class SessionEntry {
 }
 
 /**
- * Fuehrt den Index der Sessions, die dieses Plugin gestartet hat.
+ * Keeps the index of sessions this plugin started.
  *
- * Claude Code bietet keinen Befehl, der Sessions maschinenlesbar auflistet, und das
- * interne Ablageformat unter ~/.claude/projects ist undokumentiert. Statt es zu parsen
- * merkt sich das Plugin die IDs, die ihm der Ereignisstrom ohnehin nennt, und legt sie
- * im projekteigenen Zustand ab. Damit haengt die Liste an nichts, was sich unter uns
- * aendern kann.
+ * Claude Code offers no command that lists sessions machine-readably, and the internal
+ * layout under ~/.claude/projects is undocumented. Rather than parsing it, the plugin
+ * remembers the ids the event stream reports anyway and keeps them in project state. That
+ * way the list depends on nothing that can change underneath us.
  */
 @Service(Service.Level.PROJECT)
 @State(name = "ClaudePanelSessionIndex", storages = [Storage("claude-panel.xml")])
@@ -53,8 +52,16 @@ class ClaudeSessionIndex : PersistentStateComponent<ClaudeSessionIndex.IndexStat
         this.state = state
     }
 
-    /** Neueste zuerst. */
+    /** Newest first. */
     fun sessions(): List<SessionEntry> = state.sessions.sortedByDescending { it.startedAtEpochMillis }
+
+    fun remove(id: String) {
+        state.sessions.removeAll { it.id == id }
+    }
+
+    fun clear() {
+        state.sessions.clear()
+    }
 
     fun record(id: String, title: String) {
         if (id.isBlank()) return
