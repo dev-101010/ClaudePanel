@@ -363,26 +363,36 @@ enthält zwar `model` und `effortLevel`, aber wer das liest, müsste die Rangfol
 Enterprise-Richtlinie, Benutzer-, Projekt- und lokalen Einstellungen nachbauen — und liegt
 falsch, sobald sie sich unterscheiden.
 
-Stattdessen wird die CLI gefragt. **`claude --print --verbose --output-format stream-json
-/model`** kostet nichts (`num_turns: 0`, `total_cost_usd: 0`, am 2026-08-08 gemessen) und
-liefert in einem Aufruf beides:
+Stattdessen wird die CLI gefragt — nach den **Auswahlmöglichkeiten** und nach dem
+**aktuellen Stand**. Drei Aufrufe, alle am 2026-08-08 gemessen, alle kostenlos
+(`num_turns: 0`, `total_cost_usd: 0`):
 
-| Quelle im Strom | Wert |
-|---|---|
-| `system/init` → `model` | `claude-opus-5` — aufgelöst, als `--model` verwendbar |
-| `result` → `result` | `Current model: Opus 5 (effort: high)` |
+| Aufruf | Dauer | Antwort |
+|---|---|---|
+| `--print /model` | ~1,3 s | `Current model: Opus 5 (effort: high)` + `Available: sonnet, opus, haiku, fable, best, sonnet[1m], opus[1m], fable[1m], opusplan, default, or a full model ID.` |
+| `--print /effort` | ~1,3 s | `Usage: /effort <low\|medium\|high\|xhigh\|max\|auto>` |
+| `--help` | ~0,2 s | `--permission-mode <mode> … (choices: "acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan")` |
 
-Der Modellname kommt aus `init`, nicht aus dem Fließtext: dort steht der Anzeigename
-(„Opus 5"), den kein Flag annimmt. Die Effort-Stufe gibt es nur im Fließtext — `init`
-kennt **kein** Effort-Feld (Felder geprüft: `cwd`, `session_id`, `tools`, `mcp_servers`,
-`model`, `permissionMode`, `slash_commands`, `apiKeySource`, `claude_code_version`,
-`output_style`, `agents`, `skills`, `plugins`, `capabilities`, `analytics_disabled`,
-`product_feedback_disabled`, `uuid`, `memory_paths`, `fast_mode_state`,
-`fast_mode_disabled_reason`).
+`--help` braucht keine Sitzung, daher der Unterschied in der Dauer.
 
-Das Ergebnis wird **angezeigt, aber nicht gespeichert**. Sonst fröre der heutige Stand ein
-und eine spätere Änderung an der CLI-Einstellung käme nie mehr an. Gespeichert wird erst,
-was von Hand gewählt wurde.
+Damit stehen in allen drei Dropdowns genau die Werte, die die CLI nennt; die Konstanten im
+Code sind nur noch Rückfallebene, wenn eine Antwort unlesbar ist. **Kein Feld ist
+editierbar** — die CLI erlaubt zwar „or a full model ID", aber ein Textfeld erzeugt vor
+allem Tippfehler, die erst beim Start auffallen.
+
+Der leere Eintrag steht für „kein Flag mitgeben" und heißt deshalb nach dem, was dann
+gilt: „as in the CLI: Opus 5". Der Wert dahinter bleibt der leere String und wird **nicht
+gespeichert** — sonst fröre der heutige Stand ein und eine spätere Änderung an der
+CLI-Einstellung käme nie mehr an. `default` aus der Modell-Liste wird verworfen, weil es
+dasselbe sagt.
+
+Nicht verwendbar für den Zweck: `system/init` meldet zwar `model` (aufgelöst, etwa
+`claude-opus-5`) und `permissionMode`, aber **kein** Effort-Feld — alle 22 Felder geprüft
+(`cwd`, `session_id`, `tools`, `mcp_servers`, `model`, `permissionMode`, `slash_commands`,
+`apiKeySource`, `claude_code_version`, `output_style`, `agents`, `skills`, `plugins`,
+`capabilities`, `analytics_disabled`, `product_feedback_disabled`, `uuid`, `memory_paths`,
+`fast_mode_state`, `fast_mode_disabled_reason`). Und `permissionMode` stand dort auf
+`default`, was in der Auswahlliste von `--permission-mode` gar nicht vorkommt.
 
 ## Entwickeln und Testen
 

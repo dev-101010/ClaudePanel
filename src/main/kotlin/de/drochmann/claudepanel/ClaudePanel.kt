@@ -53,30 +53,34 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private val transcript = JTextPane()
     private val input = JBTextField()
     /**
+     * What the empty entry is called, once the CLI has said what it would use anyway. Until
+     * then it says only that the choice is not being overridden.
+     */
+    private var modelDefaultLabel = DEFAULT_LABEL
+    private var effortDefaultLabel = DEFAULT_LABEL
+
+    /**
      * The three of them carry no caption: in a tool window this narrow the words would take
      * a third of the row, and the values say what they are anyway. What a field is for goes
      * into its tooltip instead.
+     *
+     * None of them can be typed into, and each is filled from what the CLI reports rather
+     * than from a list kept here - a hand-written list ages with every new model, and a
+     * free-text field only invents values the CLI will reject. The constants are the
+     * fallback for when the lookup fails.
      */
-    private val permissionMode = JComboBox(PERMISSION_MODES).apply {
+    private val permissionMode = ComboBox(PERMISSION_MODES).apply {
         toolTipText = "Permission mode"
     }
 
     private val modelCombo = ComboBox(MODELS).apply {
-        isEditable = true
-        toolTipText = "Model - preset with what the CLI is set to. Aliases or full names."
-        // Without a hint the empty field shrinks to a few pixels and stops looking like
-        // something you can type into.
-        prototypeDisplayValue = "claude-sonnet-5"
-        // The empty entry means "no --model", which as a blank line in the list reads as a
-        // glitch rather than as a choice. Only the list is labelled: the value stays the
-        // empty string, and the field stays empty while nothing is being overridden.
-        renderer = defaultLabelledRenderer()
+        toolTipText = "Model"
+        renderer = defaultLabelledRenderer { modelDefaultLabel }
     }
 
-    /** Not editable, unlike the model: `--help` enumerates the levels, and that is all. */
     private val effortCombo = ComboBox(EFFORTS).apply {
-        toolTipText = "Effort level - preset with what the CLI is set to"
-        renderer = defaultLabelledRenderer()
+        toolTipText = "Effort level"
+        renderer = defaultLabelledRenderer { effortDefaultLabel }
     }
 
     /**
@@ -196,7 +200,7 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         checkLogin(executable)
         // Fetch ahead of time so the first hover already has something to show.
         refreshUsage(force = false)
-        prefillDefaults(executable)
+        loadCliOptions(executable)
     }
 
     /**
@@ -325,40 +329,78 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     /**
-     * Puts what the CLI is actually set to into the two fields, as long as nothing has been
-     * chosen for this project.
+     * Replaces the three lists with what the CLI offers, and names the empty entry after
+     * what it is set to.
      *
-     * An empty field claimed that nothing was selected, which was never true - the CLI runs
-     * with a model and an effort either way. So it is asked (free, see [ClaudeCli.defaults])
-     * and the answer shown.
-     *
-     * Not stored: that would freeze today's answer, and a later change to the CLI's own
-     * setting would never show up again. Storage stays empty until something is picked by
-     * hand, so every open reads the current answer afresh.
+     * An empty field claimed nothing was selected, which was never true - the CLI runs with
+     * a model and an effort either way. Naming the entry says so without pinning anything:
+     * the stored value stays empty, no flag is passed, and a later change to the CLI's own
+     * setting shows up at the next open instead of being frozen in today's answer.
      */
-    private fun prefillDefaults(executable: File) {
+    private fun loadCliOptions(executable: File) {
         ApplicationManager.getApplication().executeOnPooledThread {
-            val defaults = ClaudeCli.defaults(executable) ?: return@executeOnPooledThread
+            val options = ClaudeCli.options(executable)
             onEdt {
-                val settings = ClaudePanelSettings.getInstance(project)
                 suppressSettingEvents = true
                 try {
-                    // Only while the field is still untouched - the query takes a moment,
-                    // and in that moment something may have been typed.
-                    if (settings.model.isBlank() && currentModel().isBlank()) {
-                        defaults.model?.let {
-                            modelCombo.selectedItem = it
-                            modelCombo.editor.item = it
-                        }
-                    }
-                    if (settings.effort.isBlank() && currentEffort().isBlank()) {
-                        defaults.effort?.takeIf { it in EFFORTS }?.let { effortCombo.selectedItem = it }
-                    }
+                    options.currentModel?.let { modelDefaultLabel = "as in the CLI: $it" }
+                    options.currentEffort?.let { effortDefaultLabel = "as in the CLI: $it" }
+
+                    // Each list on its own: one unreadable answer must not cost the others.
+                    // What was stored decides the selection, not what is in the box - a
+                    // stored name the built-in list does not know (say "opusplan") was
+                    // dropped on restore and can be honoured now.
+                    val settings = ClaudePanelSettings.getInstance(project)
+                    refill(
+                        modelCombo,
+                        options.models,
+                        keepEmpty = true,
+                        wanted = settings.model,
+                        fallback = "",
+                    )
+                    refill(
+                        effortCombo,
+                        options.efforts,
+                        keepEmpty = true,
+                        wanted = settings.effort,
+                        fallback = "",
+                    )
+                    refill(
+                        permissionMode,
+                        options.permissionModes,
+                        keepEmpty = false,
+                        wanted = settings.permissionMode,
+                        fallback = ClaudePanelSettings.DEFAULT_PERMISSION_MODE,
+                    )
                 } finally {
                     suppressSettingEvents = false
                 }
             }
         }
+    }
+
+    /**
+     * @param keepEmpty prepends the "leave it to the CLI" entry, which is not one of the
+     * CLI's own names - it stands for passing no flag at all.
+     * @param wanted what was stored for this project; taken if the CLI still offers it.
+     * @param fallback where to land otherwise - the empty entry for model and effort, and
+     * the built-in default for the mode, which has none. Not written back to storage: a
+     * name that is gone today may be on offer again tomorrow, and the choice is not ours
+     * to discard.
+     */
+    private fun refill(
+        combo: ComboBox<String>,
+        values: List<String>,
+        keepEmpty: Boolean,
+        wanted: String,
+        fallback: String,
+    ) {
+        if (values.isEmpty()) return
+        val entries = if (keepEmpty) listOf("") + values else values
+        combo.model = DefaultComboBoxModel(entries.toTypedArray())
+        combo.selectedItem = entries.firstOrNull { it == wanted }
+            ?: entries.firstOrNull { it == fallback }
+            ?: entries.first()
     }
 
     /** A remembered mode may come from an older version - then it falls back. */
@@ -367,10 +409,10 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         permissionMode.selectedItem =
             PERMISSION_MODES.firstOrNull { it == settings.permissionMode }
                 ?: ClaudePanelSettings.DEFAULT_PERMISSION_MODE
-        modelCombo.selectedItem = settings.model
-        modelCombo.editor.item = settings.model
-        // A level from a newer CLI would otherwise sit in the box without being in the
-        // list; falling back to "" means the CLI decides, which is the safe end.
+        // A value from a newer CLI would otherwise sit in the box without being on offer;
+        // falling back to "" means the CLI decides, which is the safe end. The real lists
+        // arrive a moment later from [loadCliOptions] and keep whatever still fits.
+        modelCombo.selectedItem = MODELS.firstOrNull { it == settings.model } ?: ""
         effortCombo.selectedItem = EFFORTS.firstOrNull { it == settings.effort } ?: ""
     }
 
@@ -386,7 +428,7 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         settings.effort = currentEffort()
     }
 
-    private fun currentModel(): String = modelCombo.editor.item?.toString().orEmpty().trim()
+    private fun currentModel(): String = modelCombo.selectedItem?.toString().orEmpty().trim()
 
     private fun currentEffort(): String = effortCombo.selectedItem?.toString().orEmpty().trim()
 
@@ -1193,9 +1235,9 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         /** Shown for the empty entry - in the list only, never as a value. */
         private const val DEFAULT_LABEL = "(leave to the CLI)"
 
-        private fun defaultLabelledRenderer() =
-            SimpleListCellRenderer.create<String> { label, value, _ ->
-                label.text = if (value.isNullOrBlank()) DEFAULT_LABEL else value
+        private fun defaultLabelledRenderer(label: () -> String) =
+            SimpleListCellRenderer.create<String> { cell, value, _ ->
+                cell.text = if (value.isNullOrBlank()) label() else value
             }
 
         private const val PERMISSION_TIMEOUT_MS = 5 * 60 * 1000

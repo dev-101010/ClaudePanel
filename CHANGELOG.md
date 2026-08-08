@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-08-08
+
+### Added
+
+- Effort level as a third dropdown, so a session can be started with `--effort` without
+  leaving the panel.
+- The weekly limit in the usage gauge: the ring now shows the five-hour window alone, and
+  the dot in its centre carries the colour of the week. Before, the ring silently switched
+  to whichever window was higher, so a drop could mean a reset or merely a change of
+  window.
+
+### Changed
+
+- Mode, model and effort are filled from what the CLI reports rather than from a list kept
+  in the plugin, which aged with every new model. The model field can no longer be typed
+  into: free text mostly produced names the CLI rejects at start.
+- The empty entry is named after what applies instead - "as in the CLI: Opus 5". It claimed
+  that nothing was selected, which was never true. Nothing is pinned by this: no flag is
+  passed, and a later change to the CLI's own setting shows up at the next open.
+- A stored choice survives a CLI that no longer offers it: the field falls back, the
+  setting stays, and the choice returns when the name does.
+- The captions "Mode:" and "Model:" gave way to tooltips. In a narrow tool window they took
+  a third of the row, and the values say what they are.
+
 ## [0.1.0] - 2026-08-08
 
 First release.

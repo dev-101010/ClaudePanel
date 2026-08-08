@@ -95,57 +95,83 @@ object ClaudeCli {
         return output.stdout.trim().takeIf { it.isNotEmpty() }
     }
 
-    /** What the CLI runs with when the panel adds no flags of its own. */
-    data class Defaults(val model: String?, val effort: String?)
+    /**
+     * The choices the CLI offers, and what it is currently set to. Empty lists and `null`
+     * mean "could not be read" - the caller keeps what it had.
+     */
+    data class Options(
+        val models: List<String> = emptyList(),
+        val efforts: List<String> = emptyList(),
+        val permissionModes: List<String> = emptyList(),
+        val currentModel: String? = null,
+        val currentEffort: String? = null,
+    )
 
     /**
-     * Asks the CLI what it is set to; `null` when it could not be read.
+     * Asks the CLI what it offers and what it is set to.
      *
-     * There is no `claude config get`, and reading `~/.claude/settings.json` would mean
-     * reimplementing the precedence between enterprise policy, user, project and local
-     * settings - wrong the moment any of them disagree. So the CLI is asked instead.
+     * A list kept in the plugin ages with every new model, and there is no `claude config
+     * get` to ask instead. Reading `~/.claude/settings.json` would mean reimplementing the
+     * precedence between enterprise policy, user, project and local settings - wrong the
+     * moment any of them disagree. So the CLI is asked, three times, all measured on
+     * 2026-08-08 as costing nothing (`num_turns: 0`, `total_cost_usd: 0`):
      *
-     * `/model` answers locally: measured on 2026-08-08 at `num_turns: 0` and a cost of 0,
-     * in about 1.3 s (the CLI's start-up time). One call carries both facts:
      * ```
-     * system/init  ->  "model": "claude-opus-5"          <- resolved, usable for --model
-     * result       ->  "Current model: Opus 5 (effort: high)"
+     * --print /model   Current model: Opus 5 (effort: high)
+     *                  Usage: /model <name>. Available: sonnet, opus, …, or a full model ID.
+     * --print /effort  Usage: /effort <low|medium|high|xhigh|max|auto>
+     * --help           --permission-mode <mode>  … (choices: "acceptEdits", "auto", …)
      * ```
-     * The model is taken from `init` rather than from the prose, because the prose gives a
-     * display name ("Opus 5") that no flag accepts.
+     *
+     * Prose, so it is brittle by nature; every part fails on its own and the caller falls
+     * back to its built-in list for whatever is missing. `--help` needs no session and
+     * takes about 0.2 s, the two slash commands about 1.3 s each.
      */
-    fun defaults(executable: File): Defaults? {
-        val commandLine = GeneralCommandLine(
-            executable.absolutePath,
-            "--print", "--verbose", "--output-format", "stream-json", "/model",
+    fun options(executable: File): Options {
+        val model = print(executable, "/model").orEmpty()
+        val effort = print(executable, "/effort").orEmpty()
+        val help = capture(GeneralCommandLine(executable.absolutePath, "--help")).orEmpty()
+
+        return Options(
+            // "default" is dropped: it says the same as offering no --model at all, which
+            // the empty entry already stands for.
+            models = AVAILABLE_MODELS.find(model)?.groupValues?.get(1)
+                ?.split(",").orEmpty()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && it != "default" },
+            efforts = EFFORT_CHOICES.find(effort)?.groupValues?.get(1)
+                ?.split("|").orEmpty()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() },
+            permissionModes = PERMISSION_CHOICES.find(help)?.groupValues?.get(1)
+                ?.let { choices -> QUOTED.findAll(choices).map { it.groupValues[1] }.toList() }
+                .orEmpty(),
+            currentModel = CURRENT_MODEL.find(model)?.groupValues?.get(1)?.trim(),
+            currentEffort = CURRENT_EFFORT.find(model)?.groupValues?.get(1),
         )
+    }
+
+    private fun print(executable: File, command: String): String? =
+        capture(GeneralCommandLine(executable.absolutePath, "--print", command))
+
+    private fun capture(commandLine: GeneralCommandLine): String? {
+        commandLine
             .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
             .withCharset(StandardCharsets.UTF_8)
 
         val output = runCatching { CapturingProcessHandler(commandLine).runProcess(USAGE_TIMEOUT_MS) }
             .getOrNull() ?: return null
         if (output.isTimeout) return null
-
-        var model: String? = null
-        var effort: String? = null
-        for (line in output.stdout.lineSequence()) {
-            val event = runCatching { JsonParser.parseString(line) }.getOrNull()
-                ?.takeIf { it.isJsonObject }?.asJsonObject ?: continue
-
-            when (event.get("type")?.asString) {
-                "system" -> if (event.get("subtype")?.asString == "init") {
-                    model = event.get("model")?.takeIf { it.isJsonPrimitive }?.asString
-                }
-
-                "result" -> event.get("result")?.takeIf { it.isJsonPrimitive }?.asString
-                    ?.let { effort = EFFORT_IN_PROSE.find(it)?.groupValues?.get(1) }
-            }
-        }
-        if (model == null && effort == null) return null
-        return Defaults(model?.takeIf { it.isNotBlank() }, effort?.takeIf { it.isNotBlank() })
+        return output.stdout.takeIf { it.isNotBlank() }
     }
 
-    private val EFFORT_IN_PROSE = Regex("""effort:\s*([A-Za-z]+)""", RegexOption.IGNORE_CASE)
+    // "Available: sonnet, opus, …, or a full model ID." - the tail is prose, not a name.
+    private val AVAILABLE_MODELS = Regex("""Available:\s*([^.]*?)(?:,\s*or a full model ID)?\.""")
+    private val EFFORT_CHOICES = Regex("""/effort\s*<([^>]+)>""")
+    private val PERMISSION_CHOICES = Regex("""--permission-mode[\s\S]*?choices:([\s\S]*?)\)""")
+    private val QUOTED = Regex(""""([^"]+)"""")
+    private val CURRENT_MODEL = Regex("""Current model:\s*([^(\r\n]+)""")
+    private val CURRENT_EFFORT = Regex("""effort:\s*([A-Za-z]+)""", RegexOption.IGNORE_CASE)
 
     /**
      * What the gauge needs out of [usage]; each field is `null` when it could not be read.
