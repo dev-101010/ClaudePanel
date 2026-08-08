@@ -1,9 +1,13 @@
 # Claude Panel — Projektkontext
 
 Dieses Dokument hält fest, was beim Aufsetzen des Projekts entschieden und **verifiziert**
-wurde, damit es nicht neu hergeleitet werden muss. Stand: 2026-08-08, Arbeitsstand
-oberhalb von Commit `db024ac` (Freigabedialog, Verlaufs-Mitschnitt, Protokoll und
-Einstellungen sind gebaut, aber noch nicht committet).
+wurde, damit es nicht neu hergeleitet werden muss. Stand: 2026-08-08, Commit `b911551`,
+alles committet und gepusht.
+
+Beim Marketplace liegt **0.1.0** (Stand `11cd9f5`, versteckt eingereicht, Moderation lief
+am 2026-08-08 noch). Im Repository steht **0.2.0** — gebaut und verifiziert, aber **nicht
+hochgeladen**: Ring für zwei Fenster, Effort-Auswahl, Dropdowns aus der CLI, Untergrenze
+261 für Android Studio.
 
 ## Was das Projekt ist
 
@@ -311,8 +315,32 @@ gegen Kosmetik. Vorher fragen.
 - **Die drei Dropdowns tragen keine Beschriftung.** In einem schmalen Tool Window kostet
   „Mode:"/„Model:" ein Drittel der Reihe, und die Werte (`acceptEdits`, `opus`, `high`)
   sagen ohnehin, worum es geht. Wofür ein Feld da ist, steht im Tooltip. Der leere Eintrag
-  heißt in der Liste „(default)" — als leere Zeile las er sich wie ein Fehler, nicht wie
-  eine Wahl; der gespeicherte Wert bleibt der leere String, also „Flag entfällt".
+  heißt in der Liste „(as in the CLI)" — als leere Zeile las er sich wie ein Fehler, nicht
+  wie eine Wahl; der gespeicherte Wert bleibt der leere String, also „Flag entfällt".
+- **Eine Änderung an den drei Feldern startet den Prozess neu — beim nächsten Absenden.**
+  Das sind Startflags; ein laufender Prozess erfährt nichts davon. Ohne den Neustart stand
+  im Feld `sonnet`, während weiter Opus antwortete — ein stiller Fehlgriff, kein Kompromiss.
+  `startedParameters` hält fest, womit gestartet wurde; weicht `currentParameters()` ab,
+  wird ersetzt und mit `--resume <derselben-id>` neu gestartet. Nachgemessen: die
+  `session_id` bleibt, `model` wechselt von `claude-opus-5` auf `claude-sonnet-5`.
+
+  **Geprüft wird beim Absenden, nicht beim Umstellen** — sonst würde ein Klick ins Dropdown
+  eine laufende Antwort abwürgen. Und die ID muss **vor** `stopProcess()` gelesen werden,
+  das setzt `startedWith` auf `null`.
+- **Der Tooltip sagt, was gilt, nicht was ein Eintrag bedeutet.** „Model: Sonnet 5",
+  „Permission mode: acceptEdits" — dreimal dasselbe Muster, damit die Reihe zusammenwirkt.
+  Beim Modell wird der *gewählte* Alias dafür aufgelöst (`ClaudeCli.resolveModel`, ein
+  Aufruf, Ergebnis gemerkt); alle neun auf Vorrat aufzulösen kostet neun Startvorgänge für
+  Namen, die niemand ansieht. Ein früherer Versuch lautete „(as in the CLI)" currently
+  means Opus 5" — das erklärte einen Listeneintrag, während im Feld etwas anderes stand,
+  und las sich wie ein Widerspruch.
+- **Die Reihe sind drei gleiche Drittel** (`GridLayout`), der Ring sitzt **außerhalb** des
+  Rasters in einem `BorderLayout`. Im dritten Feld machte er dieses schmaler als die
+  anderen beiden. Breiten nach Wortlänge wurden probiert und verworfen: `GridBagLayout`
+  verteilt nur den Überschuss, kürzt bei Platzmangel also zuerst das breiteste Feld und
+  lässt die Reihe ungleichmäßig zusammenfallen; zwei eigene Layout-Klassen dafür waren ein
+  Umweg. Dass `bypassPermissions` in ein Drittel nicht passt, ist der bewusst gezahlte
+  Preis.
 
 ## CLI finden, Anmeldung, Verbrauch
 
@@ -380,11 +408,43 @@ Code sind nur noch Rückfallebene, wenn eine Antwort unlesbar ist. **Kein Feld i
 editierbar** — die CLI erlaubt zwar „or a full model ID", aber ein Textfeld erzeugt vor
 allem Tippfehler, die erst beim Start auffallen.
 
-Der leere Eintrag steht für „kein Flag mitgeben" und heißt deshalb nach dem, was dann
-gilt: „as in the CLI: Opus 5". Der Wert dahinter bleibt der leere String und wird **nicht
+Der leere Eintrag steht für „kein Flag mitgeben" und heißt **„(as in the CLI)"** — ohne
+Namen. Ein Anzeigename an dieser Stelle („as in the CLI: Opus 5") ließ die Liste in zwei
+Sprachen lesen: neun Aliase ohne Version und einen Namen mit. Was gerade gilt, steht
+stattdessen im Tooltip. Der Wert dahinter bleibt der leere String und wird **nicht
 gespeichert** — sonst fröre der heutige Stand ein und eine spätere Änderung an der
 CLI-Einstellung käme nie mehr an. `default` aus der Modell-Liste wird verworfen, weil es
 dasselbe sagt.
+
+**Aliase nennen keine Version.** `opus` zeigt auf „das jeweils neueste Opus"; welches das
+ist, steht in keiner Liste. Auflösen geht nur einzeln, mit `--print --model <alias> /model`.
+Am 2026-08-08 alle durchgemessen:
+
+| Alias | wird zu | heißt |
+|---|---|---|
+| `sonnet` | `claude-sonnet-5` | Sonnet 5 |
+| `opus` | `claude-opus-5` | Opus 5 |
+| `haiku` | `claude-haiku-4-5-20251001` | Haiku 4.5 |
+| `fable` | `claude-fable-5` | Fable 5 |
+| `best` | `claude-fable-5` | Fable 5 — **nicht** Opus |
+| `opus[1m]` | `claude-opus-5[1m]` | Opus 5 (1M context) |
+| `sonnet[1m]` | `claude-sonnet-5[1m]` | Sonnet 5 |
+| `fable[1m]` | `claude-fable-5` | **ohne `[1m]`** — fällt still zurück |
+| `opusplan` | `claude-sonnet-5` | Opus in plan mode, else Sonnet |
+
+Neun Aufrufe, zusammen rund neun Sekunden — deshalb löst das Panel nur den **gewählten**
+Alias auf und merkt sich das Ergebnis. Das Muster dafür ist
+`Current model:\s*(.+?)\s*\(effort:`, **nicht** „bis zur ersten Klammer": die 1M-Varianten
+führen selbst eine.
+
+**`/config` ist keine bessere Quelle**, obwohl es zwei Listen in einem Aufruf liefert. Es
+beschreibt die interaktiven Konfigurationsschlüssel, nicht die Flags, die wir mitgeben — und
+weicht ab: `model=` **ohne** `opus[1m]`, `permissionMode=` ohne `bypassPermissions` und mit
+`default` statt `manual`, für Effort gar kein Schlüssel. Ebenso wenig taugt die dokumentierte
+`ant models list`: das ist die CLI der **API**, sie braucht einen API-Schlüssel und kennt die
+Aliase von Claude Code nicht. Auch sonst gibt es keine Sammelauskunft — `/model list`
+wiederholt nur dieselbe Zeile, ein `/models` existiert nicht, `modelUsage` im Ergebnis ist
+leer, und `init.capabilities` sind Protokollfähigkeiten.
 
 Nicht verwendbar für den Zweck: `system/init` meldet zwar `model` (aufgelöst, etwa
 `claude-opus-5`) und `permissionMode`, aber **kein** Effort-Feld — alle 22 Felder geprüft
@@ -419,6 +479,20 @@ headless Panel „zu allem nein" bedeutet, solange der Freigabedialog nicht grei
   `<sandbox>/system/log/claude-panel.log`: `>` an die CLI, `<` von ihr, `!` stderr, `ui`
   für Bedienschritte. **Standardmäßig aus** — der Mitschnitt enthält die Unterhaltung im
   Klartext und gehört nicht ungefragt auf die Platte eines Anwenders.
+- **Der Verifier läuft auf Wunsch gegen eine lokal installierte IDE:**
+
+  ```
+  ./gradlew verifyPlugin "-PverifyLocalPath=C:/Users/denni/AppData/Local/Programs/Android Studio"
+  ```
+
+  Der Pfad ist rechnerabhängig und gehört deshalb nicht ins Repository, sondern in die
+  globale `gradle.properties` oder auf die Kommandozeile — dasselbe Muster wie
+  `platformLocalPath`. Die Verdikte liegen danach unter
+  `build/reports/pluginVerifier/<IDE>/…/verification-verdict.txt`.
+- **`pluginSinceBuild` steht auf 261, nicht 262** — sonst lehnt **Android Studio** die
+  Installation ab, das eine Plattform-Generation zurückhängt (Build `261.26222`, aber
+  bereits JBR 25, das JVM-Ziel 25 ist also kein Hindernis). Gegen beide Installationen
+  verifiziert, beide „Compatible".
 
 ## Fallstricke, die schon aufgetreten sind
 
@@ -429,6 +503,15 @@ headless Panel „zu allem nein" bedeutet, solange der Freigabedialog nicht grei
   passt** — kommentarlos. So war der Start-Knopf unsichtbar und später die Angabe in der
   Freigabeleiste abgeschnitten. Was sichtbar bleiben muss, gehört in einen eigenen
   Bereich eines `BorderLayout`, nicht ans Ende einer Reihe.
+- **`GridBagLayout` verteilt nur den Überschuss.** Gewichte wirken, solange Platz übrig
+  ist; fehlt welcher, kürzt es zuerst das Feld mit der größten Wunschbreite. Eine Reihe
+  fällt damit nacheinander zusammen statt gleichmäßig. Wer „alle drei schrumpfen zusammen"
+  will, nimmt `GridLayout` — oder muss ein eigenes Layout schreiben.
+- **Der Plugin Verifier meldet „scheduled for removal" nur gegen die neuere Plattform.**
+  `SimpleListCellRenderer.create` war auf 261 unauffällig und auf 262 bereits zum Entfernen
+  vorgemerkt. Ein Lauf gegen nur eine IDE hätte es verschwiegen. Ersatz ist
+  `ColoredListCellRenderer`; ein reiner Swing-Renderer wäre es nicht, der verliert die
+  Listendarstellung der Plattform.
 
 - **`apply`-Block-Shadowing:** In `GeneralCommandLine(...).apply { setWorkDirectory(x) }`
   verweist ein Bezeichner wie `workingDirectory` auf die gleichnamige Property von
