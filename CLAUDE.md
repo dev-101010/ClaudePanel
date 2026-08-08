@@ -357,7 +357,16 @@ und frischt dahinter auf. Der Zwischenspeicher liegt **nur im Arbeitsspeicher**.
   Arbeitsdokument, kein Teil der Veröffentlichung, und bleibt deutsch.
 - Namensraum `de.drochmann.*` — Reverse-DNS einer Domain, die Dennis gehört. Die Plugin-ID
   ist nach dem ersten Marketplace-Upload **unveränderlich**.
-- MIT-Lizenz, Code öffentlich auf GitHub.
+- MIT-Lizenz, Code öffentlich auf GitHub: <https://github.com/dev-101010/ClaudePanel>.
+- **Nicht signiert, wie beim Schwesterprojekt.** Signierung ist nicht verpflichtend — ohne
+  sie zeigt die IDE beim Installieren einen Warndialog, mehr nicht. Beleg statt Vermutung:
+  „Recent Tabs ToolWindow" (`de.drochmann.recenttabs`, Marketplace-ID 33422) wurde am
+  2026-08-08 unsigniert hochgeladen und freigegeben. Wer es später doch will, braucht
+  `openssl genpkey` + `openssl req` und drei Einträge in der globalen `gradle.properties`;
+  der Build ist dafür vorbereitet.
+- Bei einem versteckten Plugin meldet die Marketplace-API dauerhaft `approve: false` neben
+  `isHidden: true` — das ist **kein** hängender Freigabeprozess, sondern die Folge davon,
+  nicht gelistet zu sein.
 - Marketplace-Releases laufen als **hidden**: nicht gelistet, nur über Direktlink
   installierbar. Hidden-Plugins durchlaufen trotzdem das normale Approval, und
   **Unhiding ist irreversibel** — nie ungefragt vorschlagen.

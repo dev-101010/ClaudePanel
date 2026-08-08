@@ -1,3 +1,4 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -111,6 +112,14 @@ intellijPlatform {
 
     publishing {
         token = secret("PUBLISH_TOKEN", "marketplaceToken")
+    }
+
+    pluginVerification {
+        ides {
+            // Bewusst nur die Ziel-IDE, damit der Lauf ueberschaubar bleibt. Der
+            // Marketplace verifiziert beim Upload zusaetzlich gegen sein eigenes IDE-Set.
+            create(IntelliJPlatformType.IntellijIdea, providers.gradleProperty("platformVersion"))
+        }
     }
 }
 
