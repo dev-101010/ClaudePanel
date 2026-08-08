@@ -244,11 +244,45 @@ gegen Kosmetik. Vorher fragen.
    während `/usage` bereits 17:59 nannte. Es enthält **keinen Prozentwert**, der Ring
    braucht also weiterhin `/usage`.
 
-   In allen Proben stand `status: "allowed"`; der Wertebereich ist unbekannt. Deshalb
-   wird das Ereignis vorerst nur mitgeschrieben (`ClaudePanel.recordRateLimit`, auf
-   `info`-Ebene, damit es auch ohne eingeschalteten Mitschnitt anfällt). Sobald genug
-   Beispiele vorliegen, wäre der sinnvolle Schritt eine **Warnung bei Statuswechsel** —
-   nicht das Ersetzen der Prozentwerte.
+   Das Ereignis wird mitgeschrieben (`ClaudePanel.recordRateLimit`, auf `info`-Ebene,
+   damit es auch ohne eingeschalteten Mitschnitt anfällt). Genau das hat sich gelohnt:
+
+   **`status` kennt mindestens zwei Werte.** Bis dahin stand in allen Proben `allowed`.
+   Am 2026-08-08 um 15:24 lief das installierte Plugin ins Limit, und die `idea.log` der
+   echten IDE hielt fest:
+
+   ```json
+   {"status":"rejected","resetsAt":1786204800,"rateLimitType":"five_hour",
+    "overageStatus":"rejected","overageDisabledReason":"org_level_disabled",
+    "isUsingOverage":false}
+   ```
+
+   Drei Punkte daran: `rejected` ist der Wert für „Limit erreicht", also gibt es doch ein
+   strukturiertes Signal. `resetsAt` = 18:00 (+02:00) stimmte diesmal exakt mit dem
+   Fließtext überein — das Veralten oben kam daher, dass das Ereignis nur einmal pro
+   Prozess kommt, und dieser war frisch. Und `overageDisabledReason` war vorher nie belegt.
+
+   Damit wäre eine **Warnung bei `status != "allowed"`** begründet statt geraten — noch
+   nicht gebaut. Die Prozentwerte ersetzt das weiterhin nicht.
+
+   **Was das Panel heute daraus macht: nichts Sichtbares.** Ein erreichtes Limit kommt als
+   ganz normale Assistenten-Nachricht an, nur mit `model: "<synthetic>"` und Token-Zählern
+   auf 0 — `appendAssistantContent` rendert sie im Normalstil. Im gespeicherten Verlauf
+   von `f3196454` steht deshalb:
+
+   ```
+   user   hallo
+   dim    New session f3196454 started.
+   plain  You've hit your session limit · resets 6pm (Europe/Berlin)
+   dim    $0.000 · 0.3 s
+   ```
+
+   Über 20 Proben in `~/.claude/projects` gibt es zwei Formulierungen (`session limit`,
+   `monthly spend limit`) und einen verwandten Fall mit `billing_error` / 400
+   („Credit balance is too low"). In der internen Datei trägt der Satz zusätzlich
+   `error: "rate_limit"`, `isApiErrorMessage: true`, `apiErrorStatus: 429` — **ob diese
+   Felder auch über stream-json ankommen, ist nicht gemessen.** Belastbar ist nur
+   `model: "<synthetic>"` als Merkmal.
 
    Nicht empfohlen: `~/.claude/stats-cache.json` und `~/.claude/usage-data/facets/*.json`
    enthalten lokal mehr (Tagesaktivität, Token je Modell, Sitzungsauswertungen), sind aber
@@ -345,6 +379,11 @@ und frischt dahinter auf. Der Zwischenspeicher liegt **nur im Arbeitsspeicher**.
 - **`--verbose` vergessen.** Ohne das Flag startet der Prozess gar nicht, und die Ursache
   steht nur auf stderr. Deshalb wird stderr im Panel als `[stderr] …` markiert statt
   ununterscheidbar in den Verlauf zu laufen — sonst sucht man den Fehler im Rendering.
+- **`Process hasn't generated any output for a long time` in der `idea.log` ist kein
+  Absturz.** Die Warnung kommt von `BaseOSProcessHandler`, der angehängte Stacktrace zeigt
+  nur den Erzeugungsort. Zwischen zwei Zügen schweigt die CLI berechtigterweise. Der
+  Vorschlag der Plattform — `readerOptions` auf
+  `BaseOutputReader.Options.forMostlySilentProcess()` — passt hier, ist aber nicht gebaut.
 - **Prozessausgabe kommt in Häppchen, nicht zeilenweise.** `ProcessListener.onTextAvailable`
   liefert beliebige Fragmente — `ClaudeProcess.consumeStdout` puffert und zerlegt selbst an
   Zeilenumbrüchen. Nicht auf ganze Zeilen verlassen.
