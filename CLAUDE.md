@@ -356,7 +356,10 @@ und frischt dahinter auf. Der Zwischenspeicher liegt **nur im Arbeitsspeicher**.
   erspart die Umlaut-Umschreibungen, die im Deutschen sonst nötig wären. CLAUDE.md ist
   Arbeitsdokument, kein Teil der Veröffentlichung, und bleibt deutsch.
 - Namensraum `de.drochmann.*` — Reverse-DNS einer Domain, die Dennis gehört. Die Plugin-ID
-  ist nach dem ersten Marketplace-Upload **unveränderlich**.
+  ist nach dem ersten Marketplace-Upload **unveränderlich** — seit 2026-08-08 15:14 gilt
+  das: `de.drochmann.claudepanel`, Marketplace-ID **33429**, versteckt eingereicht.
+- Ab der zweiten Version genügt `./gradlew publishPlugin`; nur der erste Upload eines neuen
+  Plugins muss über die Weboberfläche.
 - MIT-Lizenz, Code öffentlich auf GitHub: <https://github.com/dev-101010/ClaudePanel>.
 - **Nicht signiert, wie beim Schwesterprojekt.** Signierung ist nicht verpflichtend — ohne
   sie zeigt die IDE beim Installieren einen Warndialog, mehr nicht. Belegt ist, dass der
