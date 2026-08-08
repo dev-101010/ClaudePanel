@@ -151,6 +151,21 @@ object ClaudeCli {
         )
     }
 
+    /**
+     * What a model alias currently stands for - `opus` says nothing about the version,
+     * this answers "Opus 5". `null` when it could not be read.
+     *
+     * Asked for one alias at a time, on demand: there is no call that resolves all of them
+     * at once, and doing all nine up front would cost nine start-ups for names nobody looks
+     * at. Free, like every other `/model` call.
+     */
+    fun resolveModel(executable: File, model: String): String? {
+        val output = capture(
+            GeneralCommandLine(executable.absolutePath, "--print", "--model", model, "/model"),
+        ) ?: return null
+        return CURRENT_MODEL.find(output)?.groupValues?.get(1)?.trim()
+    }
+
     private fun print(executable: File, command: String): String? =
         capture(GeneralCommandLine(executable.absolutePath, "--print", command))
 
@@ -170,7 +185,9 @@ object ClaudeCli {
     private val EFFORT_CHOICES = Regex("""/effort\s*<([^>]+)>""")
     private val PERMISSION_CHOICES = Regex("""--permission-mode[\s\S]*?choices:([\s\S]*?)\)""")
     private val QUOTED = Regex(""""([^"]+)"""")
-    private val CURRENT_MODEL = Regex("""Current model:\s*([^(\r\n]+)""")
+    // Lazy up to "(effort:", not "up to the first bracket" - the 1M variants carry one of
+    // their own: "Opus 5 (1M context) (effort: high)".
+    private val CURRENT_MODEL = Regex("""Current model:\s*(.+?)\s*\(effort:""")
     private val CURRENT_EFFORT = Regex("""effort:\s*([A-Za-z]+)""", RegexOption.IGNORE_CASE)
 
     /**

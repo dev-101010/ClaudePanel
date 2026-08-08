@@ -22,6 +22,7 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
+import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.GridLayout
 import java.awt.event.KeyEvent
@@ -339,12 +340,9 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 try {
                     // Into the tooltip, not into the list: the list speaks the CLI's
                     // aliases, and a display name among them reads as a second vocabulary.
-                    options.currentModel?.let {
-                        modelCombo.toolTipText = "Model - the CLI is currently set to $it"
-                    }
-                    options.currentEffort?.let {
-                        effortCombo.toolTipText = "Effort level - the CLI is currently set to $it"
-                    }
+                    cliModel = options.currentModel
+                    cliEffort = options.currentEffort
+                    options.currentModel?.let { resolvedModels[""] = it }
 
                     // Each list on its own: one unreadable answer must not cost the others.
                     // What was stored decides the selection, not what is in the box - a
@@ -375,6 +373,48 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 } finally {
                     suppressSettingEvents = false
                 }
+                describeChoices()
+            }
+        }
+    }
+
+    private fun tooltipFor(what: String, value: String?): String =
+        if (value.isNullOrBlank()) what else "$what: $value"
+
+    /** What the CLI runs with by itself, for the empty entry. */
+    private var cliModel: String? = null
+    private var cliEffort: String? = null
+
+    /** Alias to what it currently stands for; `""` is the empty entry. */
+    private val resolvedModels = mutableMapOf<String, String>()
+
+    /**
+     * Says in the tooltips what is in effect right now - not what an entry in the list would
+     * mean. `opus` alone does not tell you whether that is the 4 or the 5, so the selected
+     * alias is resolved; an alias nobody selects is never asked about.
+     */
+    private fun describeChoices() {
+        // All three read the same way - "what: value" - so the row feels of a piece. Where
+        // the value comes from the CLI's own setting it is not said again: the entry in the
+        // list already says so, and the tooltip is about what applies, not about why.
+        permissionMode.toolTipText = tooltipFor("Permission mode", permissionMode.selectedItem as? String)
+
+        val model = currentModel()
+        val resolved = resolvedModels[model]
+        modelCombo.toolTipText = tooltipFor("Model", resolved ?: model.takeIf { it.isNotBlank() })
+
+        val effort = currentEffort()
+        effortCombo.toolTipText = tooltipFor("Effort level", effort.ifBlank { cliEffort.orEmpty() })
+
+        if (resolved != null || model.isBlank()) return
+        // Not known yet: ask, then say it. Until the answer arrives the tooltip shows the
+        // alias, which is still true, only less useful.
+        val executable = ClaudeCli.resolve(ClaudePanelSettings.getInstance(project).claudePath) ?: return
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val name = ClaudeCli.resolveModel(executable, model) ?: return@executeOnPooledThread
+            onEdt {
+                resolvedModels[model] = name
+                if (currentModel() == model) describeChoices()
             }
         }
     }
@@ -432,14 +472,44 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private fun currentEffort(): String = effortCombo.selectedItem?.toString().orEmpty().trim()
 
+    /** The three start parameters, as the bar has them right now. */
+    private data class StartParameters(val mode: String, val model: String, val effort: String)
+
+    private fun currentParameters() = StartParameters(
+        mode = permissionMode.selectedItem as? String ?: ClaudePanelSettings.DEFAULT_PERMISSION_MODE,
+        model = currentModel(),
+        effort = currentEffort(),
+    )
+
+    /** What the running process was started with; `null` while none runs. */
+    private var startedParameters: StartParameters? = null
+
     private fun buildBottomBar(): JPanel {
         // No FlowLayout: in a narrow tool window it silently cuts off whatever does not
         // fit the row - it hit the start button first, then the model field. GridLayout
         // divides the width instead and squeezes rather than hiding.
-        val fields = JPanel(GridLayout(1, 3, 8, 0)).apply {
-            add(permissionMode)
-            add(modelCombo)
-            add(withTrailing(effortCombo, usageGauge))
+        // Three equal shares that narrow together. Widths in proportion to the longest
+        // value were tried and dropped: the row then narrowed unevenly, and an even row
+        // that clips a long value reads better than fields of assorted widths.
+        //
+        // The gauge sits outside the grid, not inside the third field - as a fourth cell it
+        // would take a full share, and inside the third it would make that field narrower
+        // than the other two.
+        val fields = JPanel(BorderLayout()).apply {
+            add(
+                JPanel(GridLayout(1, 3, 8, 0)).apply {
+                    add(permissionMode)
+                    add(modelCombo)
+                    add(effortCombo)
+                },
+                BorderLayout.CENTER,
+            )
+            add(usageGauge, BorderLayout.EAST)
+        }
+        // Without this the combos refuse to go below their preferred width, and the row
+        // pushes the tool window wide instead of adapting to it.
+        listOf(permissionMode, modelCombo, effortCombo).forEach {
+            it.minimumSize = Dimension(JBUI.scale(24), it.preferredSize.height)
         }
 
         // The button belongs to the input, not to the settings: it acts on what was just
@@ -498,17 +568,6 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }
     }
 
-    /** Label on the left, field next to it - the field takes the rest of the cell. */
-    /**
-     * BorderLayout rather than a row: the gauge must keep its width even when the tool
-     * window gets narrow, and the field beside it is the one that may shrink.
-     */
-    private fun withTrailing(field: JComponent, trailing: JComponent): JPanel =
-        JPanel(BorderLayout()).apply {
-            add(field, BorderLayout.CENTER)
-            add(trailing, BorderLayout.EAST)
-        }
-
     private fun wireActions() {
         input.registerKeyboardAction(
             { sendCurrentInput() },
@@ -518,9 +577,18 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
         // Remember immediately rather than only on start: otherwise the selection is lost
         // when the window closes without a process ever having run.
-        permissionMode.addActionListener { rememberSettings() }
-        modelCombo.addActionListener { rememberSettings() }
-        effortCombo.addActionListener { rememberSettings() }
+        permissionMode.addActionListener {
+            rememberSettings()
+            describeChoices()
+        }
+        modelCombo.addActionListener {
+            rememberSettings()
+            describeChoices()
+        }
+        effortCombo.addActionListener {
+            rememberSettings()
+            describeChoices()
+        }
 
         stopButton.addActionListener { interruptTurn() }
         optionsButton.addActionListener { showOptionsMenu() }
@@ -678,12 +746,17 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }
         ClaudePanelLog.log("cli", executable.absolutePath)
 
+        // Held on to so a later change to any of the three can be noticed: they are start
+        // parameters, and a running process never learns about them.
+        val parameters = currentParameters()
+        startedParameters = parameters
+
         val started = ClaudeProcess(
             executable = executable.absolutePath,
             workDir = workingDirectory,
-            permissionMode = permissionMode.selectedItem as String,
-            model = currentModel(),
-            effort = currentEffort(),
+            permissionMode = parameters.mode,
+            model = parameters.model,
+            effort = parameters.effort,
             resumeSessionId = resumeSessionId,
             onEvent = { event -> onEdt { handleEvent(event) } },
             onPermissionRequest = { request -> onEdt { enqueuePermission(request) } },
@@ -709,6 +782,7 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         persistTranscript()
         process = null
         startedWith = null
+        startedParameters = null
         clearPermissions()
         updateStatus()
     }
@@ -860,9 +934,21 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
         val wanted = selectedSessionId()
         val running = process?.takeIf { it.isRunning() }
-        if (running == null || wanted != startedWith) {
+
+        // Mode, model and effort only reach the CLI as start flags. Changing one while a
+        // process runs would otherwise be a silent no-op - the bar would say "sonnet" while
+        // opus went on answering. So the process is replaced, resuming the same session:
+        // same id, same transcript, only the flags are new. Checked here rather than on the
+        // dropdown itself, so a change never interrupts an answer that is still running.
+        val changed = running != null && startedParameters != null &&
+            startedParameters != currentParameters()
+
+        if (running == null || wanted != startedWith || changed) {
+            // Read before stopping: stopProcess clears startedWith. On a parameter change
+            // the running session is kept - same conversation, different flags.
+            val resumeId = if (changed) startedWith ?: wanted else wanted
             if (running != null) stopProcess()
-            if (!startProcess(wanted)) return
+            if (!startProcess(resumeId)) return
         }
 
         separate()
