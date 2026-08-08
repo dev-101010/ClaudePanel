@@ -28,6 +28,7 @@ class ClaudeProcess(
     private val workDir: String,
     private val permissionMode: String,
     private val model: String?,
+    private val effort: String?,
     private val resumeSessionId: String?,
     private val onEvent: (JsonObject) -> Unit,
     private val onPermissionRequest: (PermissionRequest) -> Unit,
@@ -63,6 +64,7 @@ class ClaudeProcess(
             // control_requests arrive - the session still runs.
             addParameters("--permission-prompt-tool", "stdio")
             model?.takeIf { it.isNotBlank() }?.let { addParameters("--model", it) }
+            effort?.takeIf { it.isNotBlank() }?.let { addParameters("--effort", it) }
             resumeSessionId?.takeIf { it.isNotBlank() }?.let { addParameters("--resume", it) }
             setWorkDirectory(workDir)
             charset = StandardCharsets.UTF_8

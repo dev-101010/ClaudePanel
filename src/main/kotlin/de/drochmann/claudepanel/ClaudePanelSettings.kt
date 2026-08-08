@@ -27,6 +27,10 @@ class ClaudePanelSettings : PersistentStateComponent<ClaudePanelSettings.Setting
         @JvmField
         var model: String = ""
 
+        /** Empty means no --effort, so the CLI's default. */
+        @JvmField
+        var effort: String = ""
+
         /** Empty means search PATH. Otherwise a full path to the CLI. */
         @JvmField
         var claudePath: String = ""
@@ -50,6 +54,12 @@ class ClaudePanelSettings : PersistentStateComponent<ClaudePanelSettings.Setting
         get() = state.model
         set(value) {
             state.model = value
+        }
+
+    var effort: String
+        get() = state.effort
+        set(value) {
+            state.effort = value
         }
 
     var claudePath: String

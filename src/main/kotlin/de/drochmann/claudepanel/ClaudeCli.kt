@@ -95,6 +95,58 @@ object ClaudeCli {
         return output.stdout.trim().takeIf { it.isNotEmpty() }
     }
 
+    /** What the CLI runs with when the panel adds no flags of its own. */
+    data class Defaults(val model: String?, val effort: String?)
+
+    /**
+     * Asks the CLI what it is set to; `null` when it could not be read.
+     *
+     * There is no `claude config get`, and reading `~/.claude/settings.json` would mean
+     * reimplementing the precedence between enterprise policy, user, project and local
+     * settings - wrong the moment any of them disagree. So the CLI is asked instead.
+     *
+     * `/model` answers locally: measured on 2026-08-08 at `num_turns: 0` and a cost of 0,
+     * in about 1.3 s (the CLI's start-up time). One call carries both facts:
+     * ```
+     * system/init  ->  "model": "claude-opus-5"          <- resolved, usable for --model
+     * result       ->  "Current model: Opus 5 (effort: high)"
+     * ```
+     * The model is taken from `init` rather than from the prose, because the prose gives a
+     * display name ("Opus 5") that no flag accepts.
+     */
+    fun defaults(executable: File): Defaults? {
+        val commandLine = GeneralCommandLine(
+            executable.absolutePath,
+            "--print", "--verbose", "--output-format", "stream-json", "/model",
+        )
+            .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
+            .withCharset(StandardCharsets.UTF_8)
+
+        val output = runCatching { CapturingProcessHandler(commandLine).runProcess(USAGE_TIMEOUT_MS) }
+            .getOrNull() ?: return null
+        if (output.isTimeout) return null
+
+        var model: String? = null
+        var effort: String? = null
+        for (line in output.stdout.lineSequence()) {
+            val event = runCatching { JsonParser.parseString(line) }.getOrNull()
+                ?.takeIf { it.isJsonObject }?.asJsonObject ?: continue
+
+            when (event.get("type")?.asString) {
+                "system" -> if (event.get("subtype")?.asString == "init") {
+                    model = event.get("model")?.takeIf { it.isJsonPrimitive }?.asString
+                }
+
+                "result" -> event.get("result")?.takeIf { it.isJsonPrimitive }?.asString
+                    ?.let { effort = EFFORT_IN_PROSE.find(it)?.groupValues?.get(1) }
+            }
+        }
+        if (model == null && effort == null) return null
+        return Defaults(model?.takeIf { it.isNotBlank() }, effort?.takeIf { it.isNotBlank() })
+    }
+
+    private val EFFORT_IN_PROSE = Regex("""effort:\s*([A-Za-z]+)""", RegexOption.IGNORE_CASE)
+
     /**
      * What the gauge needs out of [usage]; each field is `null` when it could not be read.
      *

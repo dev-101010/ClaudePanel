@@ -16,6 +16,7 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.JBColor
+import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
@@ -51,12 +52,31 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private val sessionCombo = ComboBox(sessionModel)
     private val transcript = JTextPane()
     private val input = JBTextField()
-    private val permissionMode = JComboBox(PERMISSION_MODES)
+    /**
+     * The three of them carry no caption: in a tool window this narrow the words would take
+     * a third of the row, and the values say what they are anyway. What a field is for goes
+     * into its tooltip instead.
+     */
+    private val permissionMode = JComboBox(PERMISSION_MODES).apply {
+        toolTipText = "Permission mode"
+    }
+
     private val modelCombo = ComboBox(MODELS).apply {
         isEditable = true
+        toolTipText = "Model - preset with what the CLI is set to. Aliases or full names."
         // Without a hint the empty field shrinks to a few pixels and stops looking like
         // something you can type into.
         prototypeDisplayValue = "claude-sonnet-5"
+        // The empty entry means "no --model", which as a blank line in the list reads as a
+        // glitch rather than as a choice. Only the list is labelled: the value stays the
+        // empty string, and the field stays empty while nothing is being overridden.
+        renderer = defaultLabelledRenderer()
+    }
+
+    /** Not editable, unlike the model: `--help` enumerates the levels, and that is all. */
+    private val effortCombo = ComboBox(EFFORTS).apply {
+        toolTipText = "Effort level - preset with what the CLI is set to"
+        renderer = defaultLabelledRenderer()
     }
 
     /**
@@ -176,6 +196,7 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         checkLogin(executable)
         // Fetch ahead of time so the first hover already has something to show.
         refreshUsage(force = false)
+        prefillDefaults(executable)
     }
 
     /**
@@ -303,6 +324,43 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         return "<html><body>$escaped<br><br><i>${legend}as of $stamp</i></body></html>"
     }
 
+    /**
+     * Puts what the CLI is actually set to into the two fields, as long as nothing has been
+     * chosen for this project.
+     *
+     * An empty field claimed that nothing was selected, which was never true - the CLI runs
+     * with a model and an effort either way. So it is asked (free, see [ClaudeCli.defaults])
+     * and the answer shown.
+     *
+     * Not stored: that would freeze today's answer, and a later change to the CLI's own
+     * setting would never show up again. Storage stays empty until something is picked by
+     * hand, so every open reads the current answer afresh.
+     */
+    private fun prefillDefaults(executable: File) {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val defaults = ClaudeCli.defaults(executable) ?: return@executeOnPooledThread
+            onEdt {
+                val settings = ClaudePanelSettings.getInstance(project)
+                suppressSettingEvents = true
+                try {
+                    // Only while the field is still untouched - the query takes a moment,
+                    // and in that moment something may have been typed.
+                    if (settings.model.isBlank() && currentModel().isBlank()) {
+                        defaults.model?.let {
+                            modelCombo.selectedItem = it
+                            modelCombo.editor.item = it
+                        }
+                    }
+                    if (settings.effort.isBlank() && currentEffort().isBlank()) {
+                        defaults.effort?.takeIf { it in EFFORTS }?.let { effortCombo.selectedItem = it }
+                    }
+                } finally {
+                    suppressSettingEvents = false
+                }
+            }
+        }
+    }
+
     /** A remembered mode may come from an older version - then it falls back. */
     private fun restoreSettings() {
         val settings = ClaudePanelSettings.getInstance(project)
@@ -311,24 +369,35 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 ?: ClaudePanelSettings.DEFAULT_PERMISSION_MODE
         modelCombo.selectedItem = settings.model
         modelCombo.editor.item = settings.model
+        // A level from a newer CLI would otherwise sit in the box without being in the
+        // list; falling back to "" means the CLI decides, which is the safe end.
+        effortCombo.selectedItem = EFFORTS.firstOrNull { it == settings.effort } ?: ""
     }
 
+    /** Guards [rememberSettings] against the panel's own writes, as [reloadSessions] does. */
+    private var suppressSettingEvents = false
+
     private fun rememberSettings() {
+        if (suppressSettingEvents) return
         val settings = ClaudePanelSettings.getInstance(project)
         settings.permissionMode = permissionMode.selectedItem as? String
             ?: ClaudePanelSettings.DEFAULT_PERMISSION_MODE
         settings.model = currentModel()
+        settings.effort = currentEffort()
     }
 
     private fun currentModel(): String = modelCombo.editor.item?.toString().orEmpty().trim()
+
+    private fun currentEffort(): String = effortCombo.selectedItem?.toString().orEmpty().trim()
 
     private fun buildBottomBar(): JPanel {
         // No FlowLayout: in a narrow tool window it silently cuts off whatever does not
         // fit the row - it hit the start button first, then the model field. GridLayout
         // divides the width instead and squeezes rather than hiding.
-        val fields = JPanel(GridLayout(1, 2, 8, 0)).apply {
-            add(labelled("Mode:", permissionMode))
-            add(labelled("Model:", modelCombo, trailing = usageGauge))
+        val fields = JPanel(GridLayout(1, 3, 8, 0)).apply {
+            add(permissionMode)
+            add(modelCombo)
+            add(withTrailing(effortCombo, usageGauge))
         }
 
         // The button belongs to the input, not to the settings: it acts on what was just
@@ -388,11 +457,14 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     /** Label on the left, field next to it - the field takes the rest of the cell. */
-    private fun labelled(text: String, field: JComponent, trailing: JComponent? = null): JPanel =
+    /**
+     * BorderLayout rather than a row: the gauge must keep its width even when the tool
+     * window gets narrow, and the field beside it is the one that may shrink.
+     */
+    private fun withTrailing(field: JComponent, trailing: JComponent): JPanel =
         JPanel(BorderLayout()).apply {
-            add(JLabel(text).apply { border = JBUI.Borders.emptyRight(4) }, BorderLayout.WEST)
             add(field, BorderLayout.CENTER)
-            trailing?.let { add(it, BorderLayout.EAST) }
+            add(trailing, BorderLayout.EAST)
         }
 
     private fun wireActions() {
@@ -406,6 +478,7 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         // when the window closes without a process ever having run.
         permissionMode.addActionListener { rememberSettings() }
         modelCombo.addActionListener { rememberSettings() }
+        effortCombo.addActionListener { rememberSettings() }
 
         stopButton.addActionListener { interruptTurn() }
         optionsButton.addActionListener { showOptionsMenu() }
@@ -568,6 +641,7 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             workDir = workingDirectory,
             permissionMode = permissionMode.selectedItem as String,
             model = currentModel(),
+            effort = currentEffort(),
             resumeSessionId = resumeSessionId,
             onEvent = { event -> onEdt { handleEvent(event) } },
             onPermissionRequest = { request -> onEdt { enqueuePermission(request) } },
@@ -1103,8 +1177,26 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         /** Placeholder for "no --resume". An empty id means: new session. */
         private val NEW_SESSION = SessionEntry("", "New session", Long.MAX_VALUE)
 
-        /** Aliases per `claude --help`; the field stays editable for full names. */
+        /**
+         * Aliases per `claude --help`; the field stays editable for full names. The empty
+         * one leaves `--model` off altogether, so the CLI keeps whatever it is set to.
+         */
         private val MODELS = arrayOf("", "opus", "sonnet", "haiku", "fable")
+
+        /**
+         * Levels per `claude --help`, plus `auto`, which only `/effort` mentions. Verified
+         * on 2026-08-08 that the flag is accepted together with `--print`. The empty one
+         * leaves `--effort` off.
+         */
+        private val EFFORTS = arrayOf("", "low", "medium", "high", "xhigh", "max", "auto")
+
+        /** Shown for the empty entry - in the list only, never as a value. */
+        private const val DEFAULT_LABEL = "(leave to the CLI)"
+
+        private fun defaultLabelledRenderer() =
+            SimpleListCellRenderer.create<String> { label, value, _ ->
+                label.text = if (value.isNullOrBlank()) DEFAULT_LABEL else value
+            }
 
         private const val PERMISSION_TIMEOUT_MS = 5 * 60 * 1000
         private const val DENIED_BY_USER = "Denied in the panel."

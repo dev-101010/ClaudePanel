@@ -44,7 +44,7 @@ claude --print
        --output-format stream-json
        --input-format stream-json
        --permission-mode <mode>
-       [--model <model>] [--resume <session-id>]
+       [--model <model>] [--effort <level>] [--resume <session-id>]
 ```
 
 stdout = ein JSON-Objekt pro Zeile. stdin = Nachrichten im selben Format.
@@ -71,6 +71,7 @@ Gedächtnis geschrieben.
 | `--include-partial-messages` | Token-Chunks (nur mit `--print` + `stream-json`) |
 | `--include-hook-events` | Hook-Lifecycle im Strom |
 | `--permission-mode` | `acceptEdits`, `auto`, `bypassPermissions`, `manual`, `dontAsk`, `plan` |
+| `--effort <level>` | `low`, `medium`, `high`, `xhigh`, `max`; mit `--print` angenommen (2026-08-08 geprüft) |
 | `--resume [value]` | ID **oder** interaktiver Picker; funktioniert mit `-p` |
 | `--json-schema`, `--max-budget-usd` | strukturierte Ausgabe, Kostendeckel |
 | `--session-id <uuid>` | eigene Session-ID vorgeben statt sie zu erfahren |
@@ -303,10 +304,15 @@ gegen Kosmetik. Vorher fragen.
   programmatische Setzen der Auswahl einen Prozess.
 - **Der Stop-Knopf erscheint nur während eines laufenden Zuges** und bricht ihn ab, ohne
   die Sitzung zu beenden.
-- **Mode und Modell werden projektbezogen gemerkt** (`ClaudePanelSettings`, eigene
+- **Mode, Modell und Effort werden projektbezogen gemerkt** (`ClaudePanelSettings`, eigene
   Komponente in derselben Datei wie der Session-Index). Projektbezogen, weil vom Projekt
   abhängt, welcher Berechtigungsmodus vertretbar ist. Gespeichert wird bei jeder
   Änderung, nicht erst beim Start.
+- **Die drei Dropdowns tragen keine Beschriftung.** In einem schmalen Tool Window kostet
+  „Mode:"/„Model:" ein Drittel der Reihe, und die Werte (`acceptEdits`, `opus`, `high`)
+  sagen ohnehin, worum es geht. Wofür ein Feld da ist, steht im Tooltip. Der leere Eintrag
+  heißt in der Liste „(default)" — als leere Zeile las er sich wie ein Fehler, nicht wie
+  eine Wahl; der gespeicherte Wert bleibt der leere String, also „Flag entfällt".
 
 ## CLI finden, Anmeldung, Verbrauch
 
@@ -349,6 +355,34 @@ beantwortet es lokal. Dauert aber rund **1,3 s** (Startzeit der CLI, nicht MCP �
 `--strict-mcp-config` bringt 0,05 s). Deshalb wird vorab geladen und zwischengespeichert;
 der Tooltip zeigt den Stand samt Uhrzeit, der Klick zeigt sofort den gespeicherten Wert
 und frischt dahinter auf. Der Zwischenspeicher liegt **nur im Arbeitsspeicher**.
+
+**Voreinstellungen erfragen statt raten:** Es gibt **kein `claude config get`** — die
+Unterbefehle sind `agents`, `auth`, `auto-mode`, `doctor`, `gateway`, `import`, `install`,
+`mcp`, `plugin`, `project`, `setup-token`, `ultrareview`, `update`. `~/.claude/settings.json`
+enthält zwar `model` und `effortLevel`, aber wer das liest, müsste die Rangfolge zwischen
+Enterprise-Richtlinie, Benutzer-, Projekt- und lokalen Einstellungen nachbauen — und liegt
+falsch, sobald sie sich unterscheiden.
+
+Stattdessen wird die CLI gefragt. **`claude --print --verbose --output-format stream-json
+/model`** kostet nichts (`num_turns: 0`, `total_cost_usd: 0`, am 2026-08-08 gemessen) und
+liefert in einem Aufruf beides:
+
+| Quelle im Strom | Wert |
+|---|---|
+| `system/init` → `model` | `claude-opus-5` — aufgelöst, als `--model` verwendbar |
+| `result` → `result` | `Current model: Opus 5 (effort: high)` |
+
+Der Modellname kommt aus `init`, nicht aus dem Fließtext: dort steht der Anzeigename
+(„Opus 5"), den kein Flag annimmt. Die Effort-Stufe gibt es nur im Fließtext — `init`
+kennt **kein** Effort-Feld (Felder geprüft: `cwd`, `session_id`, `tools`, `mcp_servers`,
+`model`, `permissionMode`, `slash_commands`, `apiKeySource`, `claude_code_version`,
+`output_style`, `agents`, `skills`, `plugins`, `capabilities`, `analytics_disabled`,
+`product_feedback_disabled`, `uuid`, `memory_paths`, `fast_mode_state`,
+`fast_mode_disabled_reason`).
+
+Das Ergebnis wird **angezeigt, aber nicht gespeichert**. Sonst fröre der heutige Stand ein
+und eine spätere Änderung an der CLI-Einstellung käme nie mehr an. Gespeichert wird erst,
+was von Hand gewählt wurde.
 
 ## Entwickeln und Testen
 
