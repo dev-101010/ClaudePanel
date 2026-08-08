@@ -62,6 +62,43 @@ intellijPlatform {
     }
 }
 
+/**
+ * Ohne Argument startet die Sandbox nur mit dem Willkommensbildschirm - und ein Tool Window
+ * gibt es erst mit offenem Projekt. Geoeffnet wird bewusst *nicht* dieses Repository:
+ * beim Testen soll Claude an Wegwerfdateien arbeiten, nicht am Quellcode des Plugins.
+ */
+val sandboxProject = layout.projectDirectory.dir("sandbox")
+
+val prepareSandboxProject by tasks.registering {
+    val target = sandboxProject
+    outputs.dir(target)
+    doLast {
+        val dir = target.asFile
+        dir.mkdirs()
+        File(dir, "notizen.txt").writeText(
+            """
+            Spielwiese fuer das Claude Panel.
+
+            Dieses Verzeichnis ist in .gitignore und wird von prepareSandboxProject
+            neu erzeugt - hier darf beim Testen alles kaputtgehen.
+
+            Zum Ausprobieren des Freigabedialogs:
+              "Lies notizen.txt"                          -> Read, fragt nach
+              "Erstelle test.txt mit dem Inhalt hallo"    -> Write, fragt nach
+            """.trimIndent(),
+        )
+    }
+}
+
+tasks.runIde {
+    dependsOn(prepareSandboxProject)
+    argumentProviders.add(CommandLineArgumentProvider { listOf(sandboxProject.asFile.absolutePath) })
+
+    // Schaltet den Mitschnitt nach system/log/claude-panel.log frei. Bewusst nur hier:
+    // die Datei enthaelt die Unterhaltung im Klartext.
+    systemProperty("claudepanel.log", "true")
+}
+
 // IntelliJ Platform 2026.2 laeuft auf JBR 25; Kotlin und Java muessen dasselbe Ziel haben.
 kotlin {
     compilerOptions {

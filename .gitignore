@@ -11,6 +11,9 @@
 *.ipr
 out/
 
+### Spielwiese fuer runIde - Wegwerfdateien, die Claude anfassen darf ###
+/sandbox/
+
 ### Signing / publishing secrets ###
 *.pem
 *.crt
