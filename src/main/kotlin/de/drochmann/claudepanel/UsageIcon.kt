@@ -11,17 +11,26 @@ import java.awt.RenderingHints
 import javax.swing.Icon
 
 /**
- * A ring that fills with how much of the limit is used.
+ * Two limits in one glyph: the ring fills with the five-hour window, the dot in its centre
+ * takes the colour of the weekly one.
  *
- * A number would need reading, a ring is taken in at a glance - and the button has room
- * for nothing else anyway. The exact figures stay in the tooltip.
+ * Numbers would need reading, this is taken in at a glance - and the row has room for
+ * nothing else anyway. The exact figures stay in the tooltip.
  *
- * [percent] `null` means "not known yet": then only the empty track is drawn, which reads
- * as absence rather than as zero usage.
+ * The two windows are shown differently on purpose. The five-hour one moves during a
+ * sitting, so it gets the shape that shows a value; the weekly one is background weather
+ * and only needs to say whether it is getting tight, so it gets a colour.
+ *
+ * `null` in either means "not known yet" and draws nothing rather than zero: an empty
+ * track reads as absence, and a missing dot as a window that was not reported.
  */
 class UsageIcon : Icon {
 
-    var percent: Int? = null
+    /** The arc - the five-hour window, or whatever else is highest if labels failed. */
+    var ringPercent: Int? = null
+
+    /** The centre dot - the weekly window. */
+    var weekPercent: Int? = null
 
     override fun getIconWidth(): Int = JBUI.scale(SIZE)
 
@@ -43,7 +52,20 @@ class UsageIcon : Icon {
             g2.color = UIUtil.getContextHelpForeground()
             g2.drawOval(x + inset, y + inset, diameter, diameter)
 
-            val value = percent?.coerceIn(0, 100) ?: return
+            // Half the stroke lies inside the path, so the free interior starts that much
+            // further in. The two pixels on top are what keeps the glyph readable when arc
+            // and dot land in the same colour band - without them the two merge into one
+            // disc and the arc stops saying anything.
+            weekPercent?.coerceIn(0, 100)?.let { week ->
+                val margin = (thickness / 2f).toInt() + JBUI.scale(2)
+                val dot = diameter - 2 * margin
+                if (dot > 0) {
+                    g2.color = colorFor(week)
+                    g2.fillOval(x + inset + margin, y + inset + margin, dot, dot)
+                }
+            }
+
+            val value = ringPercent?.coerceIn(0, 100) ?: return
             if (value == 0) return
             g2.color = colorFor(value)
             // Starting at twelve o'clock and going clockwise, like a clock face.
@@ -61,6 +83,7 @@ class UsageIcon : Icon {
     }
 
     private companion object {
-        const val SIZE = 14
+        /** 14 left too little room between arc and dot once both were drawn. */
+        const val SIZE = 16
     }
 }

@@ -68,9 +68,9 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private val optionsButton = iconButton(AllIcons.General.GearPlain, "Options")
 
     /**
-     * Purely an indicator: a ring that fills, with the figures in the tooltip. No click -
-     * it refreshes on its own, and a button that only reprints what hovering already shows
-     * would be one control too many.
+     * Purely an indicator: a ring for the five-hour window, its centre coloured by the
+     * weekly one, with the figures in the tooltip. No click - it refreshes on its own, and
+     * a button that only reprints what hovering already shows would be one control too many.
      */
     private val usageIcon = UsageIcon()
     private val usageGauge = JLabel(usageIcon).apply {
@@ -268,7 +268,11 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 if (fetched != null) {
                     usageText = fetched
                     usageFetchedAt = System.currentTimeMillis()
-                    usageIcon.percent = ClaudeCli.parseUsagePercent(fetched)
+                    val usage = ClaudeCli.parseUsage(fetched)
+                    // Without labels there is no telling the windows apart - then the ring
+                    // shows whichever is highest, as it did before there were two of them.
+                    usageIcon.ringPercent = usage.session ?: usage.highest
+                    usageIcon.weekPercent = usage.week
                 }
                 updateUsageDisplay()
             }
@@ -293,7 +297,10 @@ class ClaudePanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             .replace(">", "&gt;")
             .replace("\n", "<br>")
         val stamp = SimpleDateFormat(CLOCK_FORMAT).format(Date(fetchedAt))
-        return "<html><body>$escaped<br><br><i>as of $stamp</i></body></html>"
+        // Said only while there is in fact a dot - otherwise the legend would explain a
+        // part of the glyph that is not on screen.
+        val legend = if (usageIcon.weekPercent != null) "ring: session · centre: week · " else ""
+        return "<html><body>$escaped<br><br><i>${legend}as of $stamp</i></body></html>"
     }
 
     /** A remembered mode may come from an older version - then it falls back. */

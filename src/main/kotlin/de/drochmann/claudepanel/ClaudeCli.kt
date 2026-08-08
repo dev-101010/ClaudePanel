@@ -96,25 +96,52 @@ object ClaudeCli {
     }
 
     /**
-     * The share of the limit already used, for the ring on the button; `null` when it
-     * cannot be read.
+     * What the gauge needs out of [usage]; each field is `null` when it could not be read.
      *
-     * `/usage` answers in prose, so this reads a number out of free text and is therefore
-     * brittle by nature - a reworded line breaks it. Kept deliberately small and
-     * fail-quiet: if nothing matches, the ring simply stays empty and the tooltip still
-     * shows the full text. Nothing else depends on this value.
-     *
-     * The **highest** of the reported percentages is taken: it answers the question the
-     * ring is there for, namely how close the next limit is - not which window it belongs
-     * to.
+     * [highest] is the fallback: it needs no labels at all and therefore survives a
+     * rewording that [session] and [week] would not.
      */
-    fun parseUsagePercent(usage: String): Int? =
-        PERCENT_USED.findAll(usage)
-            .mapNotNull { it.groupValues[1].toIntOrNull() }
-            .filter { it in 0..100 }
-            .maxOrNull()
+    data class Usage(val session: Int?, val week: Int?, val highest: Int?)
+
+    /**
+     * The shares of the limits already used, for the gauge; see [Usage].
+     *
+     * `/usage` answers in prose, so this reads numbers out of free text and is therefore
+     * brittle by nature - a reworded line breaks it. Kept deliberately small and
+     * fail-quiet, in two stages: if the labels change, [highest] still carries the gauge;
+     * if nothing matches at all, the gauge stays empty and the tooltip still shows the
+     * full text. Nothing else depends on these values.
+     *
+     * Measured against CLI 2.1.225, which reports two windows:
+     * ```
+     * Current session:            39% used · resets Aug 9, 1:50am (Europe/Berlin)
+     * Current week (all models):  37% used · resets Aug 13, 2am (Europe/Berlin)
+     * ```
+     * Further lines below those speak of shares *of* the usage ("85% of your usage was at
+     * >150k context") - those are not shares *of a limit* and do not match [PERCENT_USED].
+     * Several weekly lines (a separate quota per model, say) collapse to the highest.
+     */
+    fun parseUsage(usage: String): Usage {
+        var session: Int? = null
+        var week: Int? = null
+        var highest: Int? = null
+
+        for (line in usage.lineSequence()) {
+            val percent = PERCENT_USED.find(line)?.groupValues?.get(1)?.toIntOrNull()
+                ?.takeIf { it in 0..100 } ?: continue
+
+            highest = maxOf(highest ?: percent, percent)
+            when {
+                SESSION_LINE.containsMatchIn(line) -> session = maxOf(session ?: percent, percent)
+                WEEK_LINE.containsMatchIn(line) -> week = maxOf(week ?: percent, percent)
+            }
+        }
+        return Usage(session, week, highest)
+    }
 
     private val PERCENT_USED = Regex("""(\d{1,3})\s*%\s*used""", RegexOption.IGNORE_CASE)
+    private val SESSION_LINE = Regex("""\bsession\b""", RegexOption.IGNORE_CASE)
+    private val WEEK_LINE = Regex("""\bweek(ly)?\b""", RegexOption.IGNORE_CASE)
 
     /** Starts the CLI's sign-in flow. It opens the browser itself. */
     fun loginCommand(executable: File): GeneralCommandLine =
