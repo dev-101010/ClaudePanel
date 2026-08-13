@@ -1,13 +1,18 @@
 # Claude Panel — Projektkontext
 
 Dieses Dokument hält fest, was beim Aufsetzen des Projekts entschieden und **verifiziert**
-wurde, damit es nicht neu hergeleitet werden muss. Stand: 2026-08-08, Commit `b911551`,
-alles committet und gepusht.
+wurde, damit es nicht neu hergeleitet werden muss. Stand: 2026-08-13.
 
-Beim Marketplace liegt **0.1.0** (Stand `11cd9f5`, versteckt eingereicht, Moderation lief
-am 2026-08-08 noch). Im Repository steht **0.2.0** — gebaut und verifiziert, aber **nicht
-hochgeladen**: Ring für zwei Fenster, Effort-Auswahl, Dropdowns aus der CLI, Untergrenze
+**0.1.0** ist beim Marketplace freigegeben (`approve: true`, hochgeladen 2026-08-08 15:14).
+**0.2.0** ist am 2026-08-13 hochgeladen und wartet auf die Moderation — Ring für zwei
+Fenster, Effort-Auswahl, Dropdowns aus der CLI, Umschalten wirkt im Betrieb, Untergrenze
 261 für Android Studio.
+
+Solange eine Version nicht freigegeben ist, **steht sie nicht in
+`/api/plugins/33429/updates`** — dort erschien nur 0.1.0, obwohl der Upload durch war. Wer
+den Stand prüfen will, sieht auf der Vendor-Seite nach; die öffentliche API zeigt weniger.
+Das Plugin selbst bleibt dabei unverändert versteckt (`isHidden: true`, `approve: false` —
+siehe unten).
 
 ## Was das Projekt ist
 
@@ -496,6 +501,16 @@ headless Panel „zu allem nein" bedeutet, solange der Freigabedialog nicht grei
 
 ## Fallstricke, die schon aufgetreten sind
 
+- **`publishPlugin` scheitert am Configuration Cache — nachdem der Upload gelaufen ist.**
+  `signPlugin` (Aufgabe des IntelliJ-Platform-Plugins, nicht unsere) enthält eine
+  Skript-Referenz, die sich nicht serialisieren lässt: „cannot serialize Gradle script
+  object references". Der Fehler fällt beim **Speichern** des Caches an, also nach dem
+  Hochladen — der Lauf meldet `BUILD FAILED`, obwohl die Version beim Marketplace liegt.
+  Ein zweiter Versuch bringt das erst ans Licht: „The de.drochmann.claudepanel plugin
+  already contains version 0.2.0". Am eigenen Build liegt es nicht — mit und ohne
+  `file(...)` im `signing`-Block derselbe eine Verstoß. Deshalb
+  `./gradlew publishPlugin --no-configuration-cache`. Und bei einem `BUILD FAILED` erst
+  nachsehen, ob es nicht doch geklappt hat.
 - **Windows sperrt die Plugin-JAR, solange die Sandbox läuft.** `prepareSandbox`
   scheitert dann mit „Der Vorgang ist bei einer Datei mit einem geöffneten Bereich…
   nicht anwendbar". Vor dem Bauen die Sandbox schließen.
@@ -539,7 +554,8 @@ headless Panel „zu allem nein" bedeutet, solange der Freigabedialog nicht grei
   ist nach dem ersten Marketplace-Upload **unveränderlich** — seit 2026-08-08 15:14 gilt
   das: `de.drochmann.claudepanel`, Marketplace-ID **33429**, versteckt eingereicht.
 - Ab der zweiten Version genügt `./gradlew publishPlugin`; nur der erste Upload eines neuen
-  Plugins muss über die Weboberfläche.
+  Plugins muss über die Weboberfläche. **Mit `--no-configuration-cache` aufrufen** — siehe
+  Fallstricke; am 2026-08-13 so verifiziert.
 - MIT-Lizenz, Code öffentlich auf GitHub: <https://github.com/dev-101010/ClaudePanel>.
 - **Nicht signiert, wie beim Schwesterprojekt.** Signierung ist nicht verpflichtend — ohne
   sie zeigt die IDE beim Installieren einen Warndialog, mehr nicht. Belegt ist, dass der
