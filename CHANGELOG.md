@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2026-08-08
+## [0.2.0] - 2026-08-13
 
 ### Added
 
@@ -21,9 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mode, model and effort are filled from what the CLI reports rather than from a list kept
   in the plugin, which aged with every new model. The model field can no longer be typed
   into: free text mostly produced names the CLI rejects at start.
-- The empty entry is named after what applies instead - "as in the CLI: Opus 5". It claimed
-  that nothing was selected, which was never true. Nothing is pinned by this: no flag is
-  passed, and a later change to the CLI's own setting shows up at the next open.
+- The empty entry reads "(as in the CLI)" rather than showing an empty field, which looked
+  like a fault instead of a choice. What actually applies is in the tooltip - "Model: Opus
+  5". Nothing is pinned by this: no flag is passed, and a later change to the CLI's own
+  setting shows up at the next open.
+- Changing mode, model or effort now takes effect: the next message restarts the CLI with
+  the new flags and resumes the same session. Before, the field showed `sonnet` while Opus
+  went on answering, because these are start-up flags a running process never learns about.
 - A stored choice survives a CLI that no longer offers it: the field falls back, the
   setting stays, and the choice returns when the name does.
 - The captions "Mode:" and "Model:" gave way to tooltips. In a narrow tool window they took
